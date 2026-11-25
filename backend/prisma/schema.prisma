@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  fullName     String
+  role         String     // DEPARTMENT, HR_SPECIALIST, HIRING_MANAGER, HR_DIRECTOR
+  department   String?
+  createdAt    DateTime   @default(now())
+  auditLogs    AuditLog[]
+}
+
+// POOL 1: Yêu cầu tuyển dụng (Requisition) & Tin tuyển dụng (JD)
+model JobRequisition {
+  id               String        @id @default(uuid())
+  code             String        @unique // REQ-2026-001
+  title            String
+  department       String
+  headcount        Int           @default(1)
+  isCritical       Boolean       @default(false) // Đánh dấu vị trí quan trọng cần Giám đốc NS duyệt
+  requirements     String        // Yêu cầu công việc từ Phòng ban
+  jdContent        String?       // Nội dung JD hoàn chỉnh do HR soạn
+  salaryRange      String        @default("Thỏa thuận")
+  // Trạng thái Pool 1: DRAFT_REQUEST -> HR_CHECKING -> NEED_INFO -> PENDING_APPROVAL -> APPROVED -> PUBLISHED -> REJECTED
+  status           String        @default("DRAFT_REQUEST")
+  feedbackNote     String?       // Ghi chú yêu cầu bổ sung hoặc lý do từ chối
+  createdBy        String
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  applications     Application[]
+}
+
+// POOL 2 & POOL 3: Hồ sơ ứng viên & Tiến trình tuyển dụng
+model Application {
+  id               String         @id @default(uuid())
+  trackingCode     String         @unique // APP-100001
+  jobId            String
+  candidateName    String
+  candidateEmail   String
+  candidatePhone   String
+  experience       String
+  skills           String
+  cvUrl            String
+  interviewSchedule String?       // Lịch phỏng vấn do HR lập
+  interviewScore   String?        // Đánh giá từ Phòng ban / Quản lý
+  // Trạng thái Pool 2 & 3:
+  // APPLIED -> CV_SCREENING -> INTERVIEW_SCHEDULED -> INTERVIEWED -> OFFER_PENDING_APPROVAL -> OFFER_SENT -> ONBOARDING_DOCS -> HIRED / REJECTED
+  currentStage     String         @default("APPLIED")
+  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime       @default(now())
+
+  job              JobRequisition @relation(fields: [jobId], references: [id])
+  logs             AuditLog[]
+}
+
+model AuditLog {
+  id            String      @id @default(uuid())
+  applicationId String
+  actorId       String?
+  actorName     String
+  fromStage     String
+  toStage       String
+  comment       String?
+  createdAt     DateTime    @default(now())
+
+  application   Application @relation(fields: [applicationId], references: [id])
+  actor         User?       @relation(fields: [actorId], references: [id])
+}
